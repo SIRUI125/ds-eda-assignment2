@@ -34,13 +34,19 @@ export class EDAAppStack extends cdk.Stack {
 
 
     // Integration infrastructure
-
+    const badImagesQueue = new sqs.Queue(this, "bad-orders-Q", {
+      retentionPeriod: cdk.Duration.minutes(30),
+    });
     const imageProcessQueue = new sqs.Queue(this, "img-created-queue", {
       receiveMessageWaitTime: cdk.Duration.seconds(10),
+      deadLetterQueue: {
+        queue: badImagesQueue,
+        maxReceiveCount: 1,
+      }
     });
-    const mailerQ = new sqs.Queue(this, "mailer-queue", {
-      receiveMessageWaitTime: cdk.Duration.seconds(10),
-    });
+    //const mailerQ = new sqs.Queue(this, "mailer-queue", {
+      //receiveMessageWaitTime: cdk.Duration.seconds(10),
+    //});
 
     const newImageTopic = new sns.Topic(this, "NewImageTopic", {
       displayName: "New Image topic",
@@ -60,15 +66,21 @@ export class EDAAppStack extends cdk.Stack {
       environment: {
         TABLE_NAME: imagesTable.tableName,
         REGION: 'eu-west-1',
+        BAD_IMAGES_QUEUE_URL: badImagesQueue.queueUrl,
       }
     }
   );
-
-  const mailerFn = new lambdanode.NodejsFunction(this, "mailer-function", {
+  const rejectionMailerFn = new lambdanode.NodejsFunction(this, "rejection-mailer-function", {
     runtime: lambda.Runtime.NODEJS_16_X,
     memorySize: 1024,
     timeout: cdk.Duration.seconds(3),
-    entry: `${__dirname}/../lambdas/mailer.ts`,
+    entry: `${__dirname}/../lambdas/rejectionMailer.ts`,
+  });
+  const confirmMailerFn = new lambdanode.NodejsFunction(this, "confirmMailer-function", {
+    runtime: lambda.Runtime.NODEJS_16_X,
+    memorySize: 1024,
+    timeout: cdk.Duration.seconds(3),
+    entry: `${__dirname}/../lambdas/confirmMailer.ts`,
   });
 
  // S3 --> SQS
@@ -80,7 +92,7 @@ newImageTopic.addSubscription(
   new subs.SqsSubscription(imageProcessQueue)
 );
 newImageTopic.addSubscription(
-  new subs.SqsSubscription(mailerQ));
+  new subs.LambdaSubscription (confirmMailerFn));
 
  // SQS --> Lambda
   const newImageEventSource = new events.SqsEventSource(imageProcessQueue, {
@@ -88,15 +100,21 @@ newImageTopic.addSubscription(
     maxBatchingWindow: cdk.Duration.seconds(10),
   });
 
-  const newImageMailEventSource = new events.SqsEventSource(mailerQ, {
+  //const newImageMailEventSource = new events.SqsEventSource(mailerQ, {
+    //batchSize: 5,
+   // maxBatchingWindow: cdk.Duration.seconds(10),
+  //}); 
+  const failedImageEventSource = new events.SqsEventSource(badImagesQueue, {
     batchSize: 5,
     maxBatchingWindow: cdk.Duration.seconds(10),
-  }); 
-
+  })
   processImageFn.addEventSource(newImageEventSource);
-  mailerFn.addEventSource(newImageMailEventSource);
+  //confirmMailerFn.addEventSource(newImageMailEventSource);
+  rejectionMailerFn.addEventSource(failedImageEventSource);
+  // Permissions
+  imagesBucket.grantRead(processImageFn);
 
-  mailerFn.addToRolePolicy(
+  confirmMailerFn.addToRolePolicy(
     new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
@@ -109,7 +127,18 @@ newImageTopic.addSubscription(
   );
   // Permissions
 
-  imagesBucket.grantRead(processImageFn);
+  rejectionMailerFn.addToRolePolicy(
+    new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        "ses:SendEmail",
+        "ses:SendRawEmail",
+        "ses:SendTemplatedEmail",
+      ],
+      resources: ["*"],
+    })
+  );
+  imagesTable.grantReadWriteData(processImageFn)
 
   // Output
   
