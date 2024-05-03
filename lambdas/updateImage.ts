@@ -27,9 +27,7 @@ export const handler: SNSHandler = async (event: any) => {
             }
         })
       )
-
       console.log("DynamoDB Updated: ", commandOutput)
-
     }
   }
 }

@@ -23,19 +23,18 @@ export const handler: SNSHandler = async (event: any) => {
              }
         })
     )
-        console.log("DynamoDB response: ", commandOutput)
+    console.log("DynamoDB response: ", commandOutput)
         }
       }else if(snsMessage.name) {
-        const commandOutput = await ddbDocClient.send(
-          new DeleteCommand({
-              TableName: process.env.TABLE_NAME,
-              Key: {
-                  "imageName": snsMessage.name
-              }
+    const commandOutput = await ddbDocClient.send(
+    new DeleteCommand({
+    TableName: process.env.TABLE_NAME,
+    Key: {
+    "imageName": snsMessage.name
+        }
           })
       )
-
-      console.log("DynamoDB response: ", commandOutput)
+    console.log("DynamoDB response: ", commandOutput)
     }
 }
 }

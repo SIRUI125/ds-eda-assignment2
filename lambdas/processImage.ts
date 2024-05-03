@@ -17,7 +17,6 @@ export const handler: SQSHandler = async (event) => {
   for (const record of event.Records) {
     const recordBody = JSON.parse(record.body);  // Parse SQS message
     const snsMessage = JSON.parse(recordBody.Message); // Parse SNS message
-
     if (snsMessage.Records) {
       console.log("Record body ", JSON.stringify(snsMessage));
       for (const messageRecord of snsMessage.Records) {
@@ -29,7 +28,6 @@ export const handler: SQSHandler = async (event) => {
           console.error("Unsupported file type for key: ", srcKey);
           throw new Error(`Unsupported image type: ${srcKey}`);
         }
-
         try {
           // Download the image from the S3 source bucket.
           const params: GetObjectCommandInput = {

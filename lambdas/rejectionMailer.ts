@@ -12,7 +12,6 @@ if (!SES_EMAIL_TO || !SES_EMAIL_FROM || !SES_REGION) {
     "Please add the SES_EMAIL_TO, SES_EMAIL_FROM and SES_REGION environment variables in an env.js file located in the root directory"
   );
 }
-
 type ContactDetails = {
   name: string;
   email: string;
@@ -26,7 +25,6 @@ export const handler: SQSHandler = async (event) => {
   for (const record of event.Records) {
     const recordBody = JSON.parse(record.body);
     const snsMessage = JSON.parse(recordBody.Message);
-
     if (snsMessage.Records) {
       console.log("Record body ", JSON.stringify(snsMessage));
       for (const messageRecord of snsMessage.Records) {
