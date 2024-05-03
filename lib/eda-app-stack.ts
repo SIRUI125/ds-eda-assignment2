@@ -41,7 +41,7 @@ export class EDAAppStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(10),
       deadLetterQueue: {
         queue: badImagesQueue,
-        maxReceiveCount: 1,
+        maxReceiveCount: 2,
       }
     });
     //const mailerQ = new sqs.Queue(this, "mailer-queue", {
@@ -77,7 +77,7 @@ export class EDAAppStack extends cdk.Stack {
     "DeleteImageFn",
     {
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: `${__dirname}/../lambdas/processDelete.ts`,
+      entry: `${__dirname}/../lambdas/DeleteImage.ts`,
       timeout: cdk.Duration.seconds(15),
       memorySize: 128,
       environment: {
