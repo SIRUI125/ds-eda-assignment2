@@ -7,17 +7,17 @@ YouTube Demo link - https://youtu.be/7MoyTWw0GBA
 ## Phase 1
 + The Confirmation Mailer lambda is now a direct subscriber to this topic.
 + Send an email after uploading a picture.
-  Confirmation Mailer - Fully implemented.
-  Lambda function: confirmMailer.ts
+  + Confirmation Mailer - Fully implemented.
+  + Lambda function: confirmMailer.ts
 
 
 + Send rejection emails when file do not have the right format.
-  Rejection Mailer - Fully implemented.
-  Lambda function: rejectionMailer.ts
+  + Rejection Mailer - Fully implemented.
+  + Lambda function: rejectionMailer.ts
 
 + Extend the Process Image lambda to include writing an item to a DynamoDB table.
-  Process Image - Fully implemented.
-  Lambda function: processImage.ts
+  + Process Image - Fully implemented.
+  + Lambda function: processImage.ts
 
 ## Phase 2
 + In topic2, user can delete an object (image) from the bucket or add a description for an image using the AWS CLI.
