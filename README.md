@@ -26,10 +26,11 @@ YouTube Demo link - https://youtu.be/7MoyTWw0GBA
 + Rejection Mailer - Fully implemented.
 + Process Image - Fully implemented.
 + Update Image - Fully implemented(Inculding the filter).
-+ Lambda function: updateImage.ts
+  + Lambda function: updateImage.ts
+  + Only the 'Update Table' function should receive these messages.
 + Delete Image - Fully implemented(Inculding the filter).
-+ Lambda function: deleteImage.ts
-
+  + Lambda function: deleteImage.ts
+  + The 'Process Delete' function should receive only the delete image requests. 
 
 ## Phase 3 (if relevant)
 
