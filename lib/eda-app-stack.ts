@@ -9,6 +9,9 @@ import * as sns from "aws-cdk-lib/aws-sns";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
+import { StreamViewType } from "aws-cdk-lib/aws-dynamodb";
+import {  DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import { StartingPosition } from "aws-cdk-lib/aws-lambda";
 
 import { Construct } from "constructs";
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -28,7 +31,8 @@ export class EDAAppStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       partitionKey: { name: "imageName", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,                                 
-      tableName: "Images",                                                     
+      tableName: "Images",      
+      stream: StreamViewType.OLD_IMAGE                                                
     })
     
 
@@ -51,9 +55,9 @@ export class EDAAppStack extends cdk.Stack {
     const newImageTopic = new sns.Topic(this, "NewImageTopic", {
       displayName: "New Image topic",
     }); 
-    const updateImageTopic = new sns.Topic(this, "UpdateImageTopic", {
-      displayName: "Update Image topic",
-    });
+    //const updateImageTopic = new sns.Topic(this, "UpdateImageTopic", {
+      //displayName: "Update Image topic",
+    //});
 
   // Lambda functions
 
@@ -112,7 +116,12 @@ export class EDAAppStack extends cdk.Stack {
     timeout: cdk.Duration.seconds(3),
     entry: `${__dirname}/../lambdas/confirmMailer.ts`,
   });
-
+  const deleteMailerFn = new lambdanode.NodejsFunction(this, "delete-mailer-function", {
+    runtime: lambda.Runtime.NODEJS_18_X,
+    memorySize: 1024,
+    timeout: cdk.Duration.seconds(3),
+    entry: `${__dirname}/../lambdas/deleteMailer.ts`,
+  });
  // S3 --> SQS
  imagesBucket.addEventNotification(
   s3.EventType.OBJECT_CREATED,
@@ -120,22 +129,39 @@ export class EDAAppStack extends cdk.Stack {
 );
 imagesBucket.addEventNotification(
   s3.EventType.OBJECT_REMOVED,
-  new s3n.SnsDestination(updateImageTopic)
+  new s3n.SnsDestination(newImageTopic)
 )
 newImageTopic.addSubscription(
-  new subs.SqsSubscription(imageProcessQueue)
+  new subs.SqsSubscription(imageProcessQueue,{
+    filterPolicyWithMessageBody: {
+      Records: sns.FilterOrPolicy.policy({
+        eventName: sns.FilterOrPolicy.filter(sns.SubscriptionFilter.stringFilter({
+          matchPrefixes: ['ObjectCreated:Put']
+        }))
+      })
+    }
+  })
 );
 newImageTopic.addSubscription(
-  new subs.LambdaSubscription (confirmMailerFn)
-);
-updateImageTopic.addSubscription(new subs.LambdaSubscription(deleteImageFn,{
-  filterPolicy: {
-    comment_type: sns.SubscriptionFilter.stringFilter({
-        allowlist: ['Process Delete']
-    }),
-  },
+  new subs.LambdaSubscription (confirmMailerFn,{
+    filterPolicyWithMessageBody: {
+      Records: sns.FilterOrPolicy.policy({
+        eventName: sns.FilterOrPolicy.filter(sns.SubscriptionFilter.stringFilter({
+          matchPrefixes: ['ObjectCreated:Put']
+        }))
+      })
+    }
+  }));
+  newImageTopic.addSubscription(new subs.LambdaSubscription(deleteImageFn,{
+    filterPolicyWithMessageBody: {
+      Records: sns.FilterOrPolicy.policy({
+        eventName: sns.FilterOrPolicy.filter(sns.SubscriptionFilter.stringFilter({
+          matchPrefixes: ['ObjectRemoved:Delete']
+        }))
+      })
+    }
 }));
-updateImageTopic.addSubscription(
+newImageTopic.addSubscription(
   new subs.LambdaSubscription(updateImageFn, {
       filterPolicy: {
         comment_type: sns.SubscriptionFilter.stringFilter({
@@ -161,6 +187,12 @@ updateImageTopic.addSubscription(
   processImageFn.addEventSource(newImageEventSource);
   //confirmMailerFn.addEventSource(newImageMailEventSource);
   rejectionMailerFn.addEventSource(failedImageEventSource);
+  deleteMailerFn.addEventSource(new DynamoEventSource(imagesTable, {
+    startingPosition: StartingPosition.TRIM_HORIZON,
+    batchSize: 5,
+    bisectBatchOnError: true,
+    retryAttempts: 2
+  }))
   // Permissions
   imagesBucket.grantRead(processImageFn);
 
@@ -175,9 +207,21 @@ updateImageTopic.addSubscription(
       resources: ["*"],
     })
   );
+  
   // Permissions
 
   rejectionMailerFn.addToRolePolicy(
+    new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        "ses:SendEmail",
+        "ses:SendRawEmail",
+        "ses:SendTemplatedEmail",
+      ],
+      resources: ["*"],
+    })
+  );
+  deleteMailerFn.addToRolePolicy(
     new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
@@ -197,7 +241,7 @@ updateImageTopic.addSubscription(
     value: imagesBucket.bucketName,
   });
   new cdk.CfnOutput(this, "topicARN", {
-    value: updateImageTopic.topicArn,
+    value: newImageTopic.topicArn,
   });
   }
 
